@@ -58,8 +58,8 @@ if HASH_CACHE_FILE.exists():
 
 # Determine whether to use remote OpenAI APIs or local CPU/GPU Hugging Face models
 EMBEDDINGS_MODEL_SETTING = os.getenv("Embeddings_model", "LOCAL").strip().upper()
-BASE_URL = os.getenv(BASE_URL)
-API_KEY = os.getenv(API_KEY)
+BASE_URL = os.getenv("BASE_URL")
+API_KEY = os.getenv("API_KEY")
 
 if EMBEDDINGS_MODEL_SETTING == "OPENAI":
     # 1536 dimensions match OpenAI's text-embedding-ada-002 or text-embedding-3-small
