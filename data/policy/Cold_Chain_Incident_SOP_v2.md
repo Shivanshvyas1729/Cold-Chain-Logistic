@@ -10,7 +10,7 @@ All refrigerated fleets must maintain strict IoT temperature compliance to preve
 
 ### 2. Route Congestion & Diversion Tactics
 Port congestion heavily impacts SLA compliance. 
-* **Port of Long Beach / LA:** If port congestion level (`PRT_CNG_LVL`) exceeds a severity index of **7.0**, standard routing is suspended.
+* **Port of Long Beach / LA:** If port congestion level **( a metric that measures how crowded a seaport is and how long cargo ships must wait to be unloaded or loaded.)** (`PRT_CNG_LVL`) exceeds a severity index of **7.0**, standard routing is suspended.
 * **Mitigation Protocol:** Do not hold freight at the port. Divert all active shipments to the **Inland Empire Overflow Depot (San Bernardino)** for cross-docking.
 
 ### 3. Risk Classification Triggers
