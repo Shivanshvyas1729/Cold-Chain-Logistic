@@ -1,3 +1,11 @@
+import sys
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 import os
 import urllib.parse
 from pathlib import Path
@@ -30,8 +38,8 @@ if not PINECONE_API_KEY:
 DB_HOST = os.getenv("SQL_SERVER_HOST", "localhost")
 DB_PORT = os.getenv("SQL_SERVER_PORT", "1433")
 DB_USER = os.getenv("SQL_AGENT_USER", "USR_FDE_RO")
-DB_PASSWORD = os.getenv("SQL_AGENT_PASSWORD")
-DB_NAME= os.getenv("")
+DB_PASSWORD = os.getenv("SQL_AGENT_PASSWORD", "AgentPassword2026!")
+DB_NAME = os.getenv("DB_NAME", "LogisticsDB")
 
 # Model Settings
 EMBEDDINGS_MODE = os.getenv("Embeddings_model", "LOCAL").strip().upper()
@@ -99,7 +107,9 @@ retriever = vector_store.as_retriever(search_kwargs={"k": 2})
 @tool
 def query_telemetry_db(sql_query: str) -> str:
     """
-    Executes a read-only SELECT query against FDE_VIEWS.VW_ACTIVE_FLEET.
+    Executes a read-only SELECT query against Microsoft SQL Server view FDE_VIEWS.VW_ACTIVE_FLEET.
+    IMPORTANT: Use Microsoft SQL Server (T-SQL) syntax:
+    - Use 'SELECT TOP N ...' at the start of the query (NEVER use 'LIMIT N' at the end as it is invalid in MSSQL).
     Columns: Timestamp, Latitude, Longitude, Current_Temperature_C,
     Cargo_Condition_Code, Risk_Classification, Delay_Probability,
     Port_Congestion_Level, Route_Risk_Index.
@@ -107,18 +117,33 @@ def query_telemetry_db(sql_query: str) -> str:
     if not sql_query.strip().upper().startswith("SELECT"):
         return "SECURITY BLOCK: Only SELECT queries are permitted."
 
-    target_database_name = os.getenv("DB_NAME", "LogisticsDB")
+    target_database_name = os.getenv("DB_NAME", DB_NAME or "LogisticsDB")
 
-    conn_str = (
-        f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-        f"SERVER={DB_HOST},{DB_PORT};"
-        f"DATABASE={target_database_name};" 
-        f"UID={DB_USER};" # Should be the restricted user, e.g., 'USR_FDE_RO'
-        f"PWD={DB_PASSWORD};"
-        f"Encrypt=no;TrustServerCertificate=yes;"
-    )
-    params = urllib.parse.quote_plus(conn_str)
-    engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}")
+    # Connect with modern ODBC if available, else fallback to pymssql
+    engine = None
+    try:
+        import pyodbc
+        available = pyodbc.drivers()
+        preferred = ["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"]
+        selected_driver = next((d for d in preferred if d in available), None)
+        if selected_driver:
+            extra = "Encrypt=no;TrustServerCertificate=yes;" if "18" in selected_driver else "TrustServerCertificate=yes;"
+            conn_str = (
+                f"DRIVER={{{selected_driver}}};"
+                f"SERVER={DB_HOST},{DB_PORT};"
+                f"DATABASE={target_database_name};" 
+                f"UID={DB_USER};"
+                f"PWD={DB_PASSWORD};"
+                f"{extra}"
+            )
+            params = urllib.parse.quote_plus(conn_str)
+            engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}")
+    except Exception:
+        pass
+
+    if engine is None:
+        encoded_pwd = urllib.parse.quote_plus(DB_PASSWORD) if DB_PASSWORD else ""
+        engine = create_engine(f"mssql+pymssql://{DB_USER}:{encoded_pwd}@{DB_HOST}:{DB_PORT}/{target_database_name}")
 
     try:
         with engine.connect() as conn:
@@ -211,6 +236,8 @@ def search_compliance_sop(query:str)->str:
 # ==========================================
 if __name__ == "__main__":
     print("\n--- Testing Tool 1: SQL Telemetry View ---")
+    print(query_telemetry_db.invoke("SELECT @@SERVERNAME AS container_id"))
+
     print(query_telemetry_db.invoke("SELECT TOP 2 Latitude, Longitude, Current_Temperature_C FROM FDE_VIEWS.VW_ACTIVE_FLEET"))
 
     # print("\n--- Testing Tool 2: Live Corridor API ---")

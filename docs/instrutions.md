@@ -49,13 +49,14 @@ We need to query the database
    User name*: sa
    Password*: FdeEnterprisePass123!
    Save Password: 🟩 Check this box
-   Database name: Type master (or leave it on "Select a database")
+   Database name: Type LogisticsDB (or leave it on "Select a database" / master)
    Encrypt: ⚠️ Change this from Mandatory to Optional (or False)
    ```
 
 - CTRL + N
 - SQL
-- SELECT COUNT(*) AS total_rows FROM dbo.TBL_SC_FLEET_HIST_RAW;
+- USE LogisticsDB;
+  SELECT COUNT(*) AS total_rows FROM dbo.TBL_SC_FLEET_HIST_RAW;
 
 ## instruction for Ec2 instance > datbase
 - Instance type : c7i-flex.large
@@ -102,7 +103,7 @@ docker run -v mssql_data:/var/opt/mssql \
 * User name*: USR_FDE_RO
 * Password*: AgentPassword2026!
 * Save Password: 🟩 Check this box / Turn it ON
-* Database name: Type master (or click "Select a database" and select master)
+* Database name: Type LogisticsDB (or click "Select a database" and select LogisticsDB)
 * Encrypt: Change this from Mandatory to Optional (or False)
 ```
 
@@ -135,7 +136,10 @@ I'm a new dispatcher on the night shift. Can you quickly explain the difference 
 ## Phase 4
 Go to VS-code > CTRL + N > 'click on plain-text' and use 'sql'
 
-Select the su user and write below :
+Select the sa user, ensure you are in LogisticsDB (`USE LogisticsDB;`), and write below (note: `setup_security_and_view.sql` also provisions this automatically):
+
+USE LogisticsDB;
+GO
 
 CREATE TABLE FDE_VIEWS.AgentAuditLog (
     LogID INT IDENTITY(1,1) PRIMARY KEY,
