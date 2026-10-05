@@ -1,6 +1,10 @@
 # 🧊 Autonomous Cold-Chain Logistics & Telemetry AI Agent
 > **Enterprise Multi-Agent Intelligence System for Real-Time Fleet Telemetry, Corridor Risk Assessment, and SOP Compliance Monitoring.**
 
+<p align="center">
+  <img src="data/images/cold_chain_concept_1791179403658.jpg" alt="Autonomous Cold-Chain Logistics AI Agent Architecture & Telemetry Workflow" width="100%">
+</p>
+
 ---
 
 ## 📑 Table of Contents
@@ -22,6 +26,7 @@
 11. [Step-by-Step Implementation Lifecycle](#-step-by-step-implementation-lifecycle)
    - [Phase 0: Database Provisioning & Legacy Ingestion](#phase-0-database-provisioning--legacy-ingestion)
    - [Phase 1: SOP Document Vectorization (Pinecone)](#phase-1-sop-document-vectorization-pinecone)
+     - [Automated Ingestion & Change-Detection Lifecycle](#-end-to-end-automated-ingestion--change-detection-lifecycle)
    - [Phase 2: Enterprise Security, Semantic Layer & Agent Permissions](#phase-2-enterprise-security-semantic-layer--agent-permissions)
    - [Phase 3: LangGraph Multi-Agent Orchestration](#phase-3-langgraph-multi-agent-orchestration)
    - [Phase 4: Agent Audit Logging Trail](#phase-4-agent-audit-logging-trail)
@@ -87,6 +92,10 @@ This system is built for real-world mission-critical operations where supply cha
 
 ## ⚡ What Problem Does It Solve? (Value Proposition)
 
+<p align="center">
+  <img src="data/images/problem_solution.png" alt="Traditional Logistics Failure vs AI Agent Automation" width="100%">
+</p>
+
 | Pain Point in Traditional Logistics | How This Multi-Agent System Solves It |
 | :--- | :--- |
 | **Silent Cargo Spoilage & Delayed Reaction**<br>Cargo warms up due to an auxiliary reefer failure, but dispatchers only notice hours later when unloading at the dock. | **Instant Telemetry Anomaly Detection**<br>The agent analyzes live temperatures from IoT sensors and cross-references them against product-specific SOP thresholds in real time. |
@@ -129,31 +138,64 @@ The underlying telemetry engine contains a longitudinal telematics dataset repre
 
 The system operates across a **6-stage pipeline** connecting raw IoT telematics to executive decision support:
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Dispatcher as Dispatcher (Console / UI)
-    participant Agent as LangGraph Orchestrator (DeepSeek-V4-Flash)
-    participant DB as SQL Server (LogisticsDB on EC2/Docker)
-    participant Weather as Open-Meteo Weather API
-    participant SOP as Pinecone Vector Store (SOP Index)
-    participant Audit as AgentAuditLog (Database Audit Trail)
+```text
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ 💬 DISPATCHER-AGENT INTERACTION & MULTI-TOOL EXECUTION FLOW                                     │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-    Dispatcher->>Agent: "Find shipments near LA, check weather, and verify SOP compliance"
-    Note over Agent: Evaluates question & constructs execution plan
-    
-    Agent->>DB: Tool 1: SELECT TOP 5 * FROM FDE_VIEWS.VW_ACTIVE_FLEET WHERE Latitude ~33.8...
-    DB-->>Agent: Returns: Lat=33.87, Lon=-118.45, Temp=18.98°C, Risk=High, DelayProb=0.999
-    
-    Agent->>Weather: Tool 2: GET /forecast?lat=33.87&lon=-118.45
-    Weather-->>Agent: Returns: Ambient Temp=37.3°C, Wind=17.7km/h, High Disruption (8.5/10)
-    
-    Agent->>SOP: Tool 3: Query: "Temperature threshold for fresh perishables and high risk escalation"
-    SOP-->>Agent: Returns: Fresh Perishables max 4.0°C, High Risk + Delay > 0.65 = Tier 2 Escalation
-    
-    Note over Agent: Synthesizes multi-source evidence into structured response
-    Agent->>Audit: INSERT INTO FDE_VIEWS.AgentAuditLog (Session, Node, Tool, Payload)
-    Agent-->>Dispatcher: Structured Output: Executive Summary + Telemetry Table + SOP Action Plan
+ 👤 DISPATCHER (Streamlit Console / CLI)
+ ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │ "Check refrigerated shipments near Los Angeles (lat ~33.8), get live weather conditions along  │
+ │  the route, and verify if cargo temperatures comply with our perishables SOP."                 │
+ └───────────────────────────────────────────────┬────────────────────────────────────────────────┘
+                                                 │
+                                                 ▼
+ 🤖 FDE REASONING ENGINE (LangGraph State Machine • DeepSeek-V4-Flash)
+ ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │ 🧠 Step 0: Intent Evaluation & Plan Synthesis                                                  │
+ │    • Identified need for: (1) Fleet Telemetry, (2) Route Weather, (3) Regulatory SOP Check     │
+ │                                                                                                │
+ │ ⚡ Step 1: Query Fleet Telemetry Database (Tool: query_telemetry_db)                            │
+ │    • Executed SQL : SELECT TOP 5 Timestamp, Latitude, Longitude, Current_Temperature_C,        │
+ │                     Risk_Classification, Delay_Probability FROM FDE_VIEWS.VW_ACTIVE_FLEET      │
+ │                     WHERE Latitude BETWEEN 33.7 AND 34.0 ORDER BY Timestamp DESC               │
+ │    • DB Output    : Lat: 33.87, Lon: -118.45, Cargo Temp: 18.98°C, Risk: High, DelayProb: 0.999│
+ │                                                                                                │
+ │ ⚡ Step 2: Fetch Live Environmental Hazards (Tool: fetch_corridor_conditions)                  │
+ │    • API Call     : GET /v1/forecast?latitude=33.87&longitude=-118.45                          │
+ │    • Meteo Output : Ambient Temp: 37.3°C (99.1°F), Wind: 17.7 km/h, Disruption Index: 8.5/10   │
+ │                                                                                                │
+ │ ⚡ Step 3: Semantic Compliance RAG Search (Tool: search_compliance_sop)                        │
+ │    • Vector Query : "Temperature threshold for fresh perishables and high risk escalation"     │
+ │    • Pinecone Hit : Section 2.1: Fresh Perishables Max 4.0°C (Permissible excursion: 0 mins)  │
+ │                     Section 3.2: High Risk + Delay > 0.65 requires Tier 2 Manager Escalation   │
+ │                                                                                                │
+ │ ⚡ Step 4: Write Immutable Audit Log (SQL Security Sink)                                       │
+ │    • Audit Query  : INSERT INTO FDE_VIEWS.AgentAuditLog (SessionID, Node, Tool, Payload)       │
+ └───────────────────────────────────────────────┬────────────────────────────────────────────────┘
+                                                 │
+                                                 ▼
+ 🤖 STRUCTURED RESOLUTION REPORT (Synthesized Output Delivered to Dispatcher)
+ ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │ 1. 🚨 EXECUTIVE SUMMARY                                                                        │
+ │    CRITICAL COLD-CHAIN BREACH DETECTED: Unit at (33.87, -118.45) is running at 18.98°C,        │
+ │    exceeding the maximum allowed perishable threshold of 4.0°C (+14.98°C excursion). Immediate │
+ │    management escalation and reefer intervention is required.                                  │
+ │                                                                                                │
+ │ 2. 📊 TELEMETRY & ENVIRONMENTAL ANALYSIS                                                       │
+ │    ┌────────────┬─────────┬──────────┬────────────┬─────────────┬──────────────┬─────────────┐ │
+ │    │ Timestamp  │ Lat/Lon │ Cargo °C │ Ambient °C │ Delay Prob  │ Risk Level   │ Corridor    │ │
+ │    ├────────────┼─────────┼──────────┼────────────┼─────────────┼──────────────┼─────────────┤ │
+ │    │ 2024-08-29 │ 33.87 / │ 18.98°C  │ 37.3°C     │ 99.9% (0.99)│ HIGH RISK    │ LA Heatwave │ │
+ │    │ 14:00 UTC  │ -118.45 │ (ALARM)  │ (Extreme)  │ (Critical)  │ (Tier 2 Req) │ 8.5/10 Cong │ │
+ │    └────────────┴─────────┴──────────┴────────────┴─────────────┴──────────────┴─────────────┘ │
+ │                                                                                                │
+ │ 3. 🛡️ MANDATORY SOP ACTION PLAN (SOP v2.0 Compliance Citations)                               │
+ │    • [FSMA Rule 204] Immediate auxiliary reefer cycle reset dispatched to on-board driver.    │
+ │    • [Tier 2 Escalation] Rule: 'High Risk' AND Delay > 0.65. Senior Operations Director alerted│
+ │    • [Route Diversion] Divert shipment to Inland Empire Cold Storage Depot (ETA: 42 mins).     │
+ │    • [Audit Trail] Telemetry snapshot persisted to FDE_VIEWS.AgentAuditLog [Session ID: 77633d]│
+ └────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Detailed Operational Stages:
@@ -204,6 +246,8 @@ Cold-Chain-Logistic/
 │   ├── cache/                          # Ingestion state tracking
 │   │   └── ingestion_hash_cache.json   # MD5 checksums of policy files for incremental Pinecone indexing
 │   ├── images/                         # Architectural diagrams, schema comparisons & UI flowcharts
+│   │   ├── cold_chain_concept_1791179403658.jpg # End-to-end multi-agent system architecture & telemetry workflow
+│   │   ├── problem_solution.png        # Traditional logistics failure vs AI agent automation comparison
 │   │   ├── image.png                   # Views concept & abstraction diagram
 │   │   ├── image-1.png                 # Database security & view isolation architecture
 │   │   ├── image-2.png                 # MySQL Workbench vs SQL Server schema hierarchy comparison
@@ -233,7 +277,8 @@ Cold-Chain-Logistic/
     │   └── system_prompt.txt           # Tri-part system prompt (Summary, Analysis Table, Action Plan, T-SQL rules)
     ├── agent_tools.py                  # LangChain @tool definitions (SQL query, Open-Meteo weather, Pinecone SOP search)
     ├── orchestrator.py                 # LangGraph ReAct agent state machine & CLI interactive dispatcher
-    └── ui.py                           # Full-featured Streamlit dispatcher web console with live telemetry & audit logs
+    ├── sop_service.py                  # Standalone SOP document manager, file I/O & Pinecone sync service
+    └── ui.py                           # Full-featured Streamlit console (Dispatch Console + Admin SOP & Audit Portal)
 ```
 
 ---
@@ -381,67 +426,91 @@ In production deployments, the system adheres to strict VPC network isolation:
 1. **Ingress (Public)**: Only Port 8501 (Streamlit App Node) is accessible to authenticated dispatchers over HTTPS.
 2. **Internal Communication**: Port 1433 (SQL Server) is locked down via AWS Security Group rules to accept traffic strictly from the private IP of the App Node. The database remains completely invisible to the public internet.
 
-```mermaid
-flowchart TB
-    subgraph CLIENT["Client Applications & Consoles"]
-        UI["Streamlit Dispatch Console\n(src/ui.py)"]
-        CLI["CLI Interactive Dispatcher\n(src/orchestrator.py)"]
-        EXT["VS Code SQL Server Extension\n(mssql)"]
-    end
+```text
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                    🏢 COMPLETE 5-LAYER END-TO-END SYSTEM ARCHITECTURE                           │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-    subgraph BRAIN["LangGraph Orchestration Layer"]
-        AGENT["FDE ReAct Agent\n(DeepSeek-V4-Flash / GPT-4o)"]
-        MEM[("MemorySaver Checkpointer\n(Thread State)")]
-        PROMPT["Structured System Prompt\n(Executive Summary, Table, Actions)"]
-    end
-
-    subgraph TOOLS["Tool Registry (src/agent_tools.py)"]
-        T1["Tool 1: query_telemetry_db\n(SQLAlchemy + pyodbc/pymssql)"]
-        T2["Tool 2: fetch_corridor_conditions\n(Open-Meteo Live API)"]
-        T3["Tool 3: search_compliance_sop\n(Pinecone Vector Retriever)"]
-    end
-
-    subgraph CLOUD["AWS EC2 / Local Docker Infrastructure"]
-        subgraph DOCKER["Docker Engine (Port 1433:1433)"]
-            subgraph SQL_ENGINE["Microsoft SQL Server 2022 Engine"]
-                subgraph DB_LOGISTICS["LogisticsDB"]
-                    RAW[("dbo.TBL_SC_FLEET_HIST_RAW\n(32,065 Raw Telemetry Records)")]
-                    VIEW["FDE_VIEWS.VW_ACTIVE_FLEET\n(Semantic Read-Only View)"]
-                    AUDIT[("FDE_VIEWS.AgentAuditLog\n(Execution Trace Trail)")]
-                end
-                subgraph SYS_DBS["System Databases"]
-                    MASTER["master | model | msdb | tempdb"]
-                end
-                subgraph SEC["Security & Access Gate"]
-                    ADMIN_USER["sa (System Administrator)"]
-                    AGENT_USER["USR_FDE_RO (Restricted Least-Privilege)"]
-                end
-            end
-        end
-        PINECONE[("Pinecone Vector Store\n(sop-index-openai)")]
-        METEO["Open-Meteo REST API\n(Live Temp & Wind)"]
-    end
-
-    CLIENT --> BRAIN
-    AGENT <--> MEM
-    PROMPT --> AGENT
-    AGENT --> T1
-    AGENT --> T2
-    AGENT --> T3
-
-    T1 -->|USR_FDE_RO (SELECT only)| VIEW
-    VIEW -.->|Translates Legacy Columns| RAW
-    T2 --> METEO
-    T3 --> PINECONE
-    UI -->|USR_FDE_RO (INSERT)| AUDIT
-    UI -->|sa (Audit Inspection)| AUDIT
-    EXT -->|sa / USR_FDE_RO| SQL_ENGINE
-
-    style VIEW fill:#1565C0,stroke:#64B5F6,stroke-width:2px,color:#fff
-    style AGENT fill:#4A148C,stroke:#BA68C8,stroke-width:2px,color:#fff
-    style T1 fill:#1B5E20,stroke:#81C784,stroke-width:2px,color:#fff
-    style T2 fill:#E65100,stroke:#FFB74D,stroke-width:2px,color:#fff
-    style T3 fill:#006064,stroke:#4DD0E1,stroke-width:2px,color:#fff
+ ┌───────────────────────────────────────────────────────────────────────────────────────────────┐
+ │ LAYER 1: CLIENT & PRESENTATION INTERFACES                                                     │
+ │                                                                                               │
+ │  ┌──────────────────────────────┐  ┌──────────────────────────────┐  ┌─────────────────────┐  │
+ │  │ Streamlit Dispatch Console   │  │ CLI Interactive Dispatcher   │  │ VS Code Extension   │  │
+ │  │ • Dispatcher Chat Interface  │  │ • Terminal REPL Mode         │  │ • Direct MSSQL IDE  │  │
+ │  │ • Live Tool Traces & Inputs  │  │ • Zero-overhead debugging    │  │ • Schema Inspection │  │
+ │  │ • Admin Audit Log Viewer     │  │ • Scripted pipeline tests    │  │ • Direct Query Run  │  │
+ │  │ (src/ui.py)                  │  │ (src/orchestrator.py)        │  │ (mssql extension)   │  │
+ │  └──────────────┬───────────────┘  └──────────────┬───────────────┘  └──────────┬──────────┘  │
+ └─────────────────┼─────────────────────────────────┼─────────────────────────────┼─────────────┘
+                   │ HTTPS :8501                     │ Python In-Process           │ Port 1433
+                   ▼                                 ▼                             │
+ ┌─────────────────────────────────────────────────────────────────────────────────┼─────────────┐
+ │ LAYER 2: MULTI-AGENT REASONING & ORCHESTRATION LAYER (LangGraph State Machine)  │             │
+ │                                                                                 │             │
+ │  ┌───────────────────────────────────────────────────────────────────────────┐  │             │
+ │  │ 🧠 FDE Reasoner Node (LLM Engine: DeepSeek-V4-Flash / GPT-4o / Claude)     │  │             │
+ │  │  • System Prompt Template: Tri-Part Output + T-SQL Syntax Guardrails      │  │             │
+ │  │  • ReAct Dynamic Reasoning: Decides whether to query SQL, Weather, or SOP  │  │             │
+ │  │  • Self-Correction Loop: Automatically retries malformed SQL dialect bugs  │  │             │
+ │  └──────────────────────────────────────┬────────────────────────────────────┘  │             │
+ │                                         │ State Updates                         │             │
+ │  ┌──────────────────────────────────────▼────────────────────────────────────┐  │             │
+ │  │ 💾 State & Memory Checkpointer (MemorySaver)                              │  │             │
+ │  │  • Thread-Isolated Session Tokens (thread_id)                             │  │             │
+ │  │  • Multi-Turn Context Preservation across complex multi-step queries      │  │             │
+ │  └──────────────────────────────────────┬────────────────────────────────────┘  │             │
+ └─────────────────────────────────────────┼───────────────────────────────────────┼─────────────┘
+                                           │ Function Calling Bindings             │
+                                           ▼                                       │
+ ┌─────────────────────────────────────────────────────────────────────────────────┼─────────────┐
+ │ LAYER 3: ENTERPRISE TOOL REGISTRY LAYER (src/agent_tools.py)                    │             │
+ │                                                                                 │             │
+ │  ┌──────────────────────────┐  ┌──────────────────────────────┐  ┌──────────────┴───────────┐ │
+ │  │ Tool 1: query_telemetry  │  │ Tool 2: fetch_corridor_cond  │  │ Tool 3: search_compl_sop │ │
+ │  │ • Generates T-SQL Query  │  │ • Open-Meteo REST API Client │  │ • Pinecone Vector Client │ │
+ │  │ • SQLAlchemy Engine Bind │  │ • Real-time Corridor Weather │  │ • Cosine Vector Search   │ │
+ │  │ • ODBC Driver 18/17/Fall │  │ • Ambient Temp + Wind Hazards│  │ • Dual Backend Embedder │ │
+ │  └─────────────┬────────────┘  └──────────────┬───────────────┘  └──────────────┬───────────┘ │
+ └────────────────┼──────────────────────────────┼─────────────────────────────────┼─────────────┘
+                  │                              │                                 │
+                  ▼                              ▼                                 ▼
+ ┌───────────────────────────────────────────────┼───────────────────────────────────────────────┐
+ │ LAYER 4: DATA, KNOWLEDGE & CLOUD INFRASTRUCTURE (AWS EC2 / Local Docker)        │             │
+ │                                               │                                 │             │
+ │  ┌─────────────────────────────────────────┐  │  ┌───────────────────────────┐  │  ┌──────────┐│
+ │  │ 🐳 Docker Engine (Port 1433:1433)       │  │  │ ☁️ Open-Meteo REST API     │  │  │ Pinecone ││
+ │  │                                         │  │  │                           │  │  │ Cloud    ││
+ │  │  ┌───────────────────────────────────┐  │  │  │ • Endpoint:               │  │  │ Vector DB││
+ │  │  │ Microsoft SQL Server 2022 Engine  │  │  │  │   /v1/forecast            │  │  │          ││
+ │  │  │                                   │  │  │  │ • Parameters:             │  │  │ sop-index││
+ │  │  │  ┌─────────────────────────────┐  │  │  │  │   latitude, longitude     │  │  │ -openai  ││
+ │  │  │  │ LogisticsDB Database        │  │  │  │  │ • Metrics:                │  │  │ (1536 dim││
+ │  │  │  │                             │  │  │  │  │   current_weather         │  │  │          ││
+ │  │  │  │  • dbo.TBL_SC_FLEET_HIST_RAW│  │  │  │  │   windspeed_10m           │  │  │ sop-index││
+ │  │  │  │    (32,065 Historical IoT)  │  │  │  │  │   temperature_2m          │  │  │ -local   ││
+ │  │  │  │                             │  │  │  │  │ • Zero Authentication API │  │  │ (1024 dim││
+ │  │  │  │  • FDE_VIEWS.VW_ACTIVE_FLEET│  │  │  │  └───────────────────────────┘  │  └──────────┘│
+ │  │  │  │    (Clean English View)     │  │  │  │                                 │             │
+ │  │  │  │                             │  │  │  │                                 │             │
+ │  │  │  │  • FDE_VIEWS.AgentAuditLog  │  │  │  │                                 │             │
+ │  │  │  │    (Immutable Audit Trail)  │  │  │  │                                 │             │
+ │  │  │  └─────────────────────────────┘  │  │  │                                 │             │
+ │  │  └───────────────────────────────────┘  │  │                                 │             │
+ │  └─────────────────────────────────────────┘  │                                 │             │
+ └───────────────────────────────────────────────┼─────────────────────────────────┼─────────────┘
+                                                 │                                 │
+                                                 ▼                                 ▼
+ ┌───────────────────────────────────────────────────────────────────────────────────────────────┐
+ │ LAYER 5: ENTERPRISE GOVERNANCE, SECURITY & AUDIT LAYER                                        │
+ │                                                                                               │
+ │  ┌─────────────────────────────┐  ┌────────────────────────────┐  ┌────────────────────────┐  │
+ │  │ 🔒 Least-Privilege (RBAC)   │  │ 🛡️ Immutable Audit Sink    │  │ 📑 Incremental SOP     │  │
+ │  │ • User: USR_FDE_RO          │  │ • Table: AgentAuditLog     │  │    State Cache          │  │
+ │  │ • GRANT SELECT on View      │  │ • Logs SessionID, Node,    │  │ • MD5 Hash Tracking     │  │
+ │  │ • DENY SELECT on Raw Table  │  │   ToolName, Content        │  │ • Auto Vector Pruning   │  │
+ │  │ • Hardened against DML/DDL  │  │ • Dedicated Admin Review   │  │ • Zero redundant writes │  │
+ │  └─────────────────────────────┘  └────────────────────────────┘  └────────────────────────┘  │
+ └───────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -630,6 +699,83 @@ uv run python scripts/ingest_sop_pinecone.py
      * **Local HuggingFace Mode (`Embeddings_model=LOCAL`)**: Loads `BAAI/bge-m3` running locally on CPU/GPU producing **1024-dimensional** vectors indexed into `sop-index-local`.
    * **Self-Healing Dimension Check**: If an existing Pinecone index is detected with an incompatible dimension (e.g. switching between 1024-dim and 1536-dim), the pipeline automatically deletes and reprovisions the index with the correct dimensionality and cosine metric (`metric="cosine"`, `ServerlessSpec(cloud="aws", region="us-east-1")`).
 
+#### 🔄 End-to-End Automated Ingestion & Change-Detection Lifecycle
+
+The Pinecone ingestion pipeline uses an **incremental, hash-based change-detection pipeline** backed by a local JSON cache ([`data/cache/ingestion_hash_cache.json`](file:///c:/Users/DELL/Desktop/Cold%20Chain%20Logistic/data/cache/ingestion_hash_cache.json)).
+
+```
+[ data/policy/ Directory ]
+       │
+       ▼
+1. Scan eligible files (.md, .txt, .pdf, .csv, .xlsx)
+       │
+       ▼
+2. Compare MD5 Hash with [ ingestion_hash_cache.json ]
+       ├── File missing on disk? ────────► Purge old vectors from Pinecone
+       ├── Hash identical? ──────────────► SKIP (Zero cost, no re-embedding)
+       └── New file OR Hash changed? ────► Proceed to Ingest
+                                                  │
+                                                  ▼
+                                       3. Delete prior version chunks
+                                                  │
+                                                  ▼
+                                       4. Polymorphic Chunking & Embedding
+                                                  │
+                                                  ▼
+                                       5. Batch Upsert to Pinecone & Update Hash Cache
+```
+
+##### Step 1: Self-Healing Pinecone Provisioning
+Lines 90–116 in [`scripts/ingest_sop_pinecone.py`](file:///c:/Users/DELL/Desktop/Cold%20Chain%20Logistic/scripts/ingest_sop_pinecone.py#L90-L116):
+* Connects to Pinecone and checks if `sop-index-openai` (1536-dim) or `sop-index-local` (1024-dim) exists.
+* If the index doesn't exist, it **automatically provisions** a serverless index in AWS `us-east-1`.
+* **Self-Healing**: If the index exists but with an incompatible dimension (e.g., switched from local BAAI/bge-m3 to OpenAI), it automatically drops and recreates the index with the correct dimensions.
+
+##### Step 2: Change Detection via MD5 Hashing
+Lines 39–53 & 254–263 in [`scripts/ingest_sop_pinecone.py`](file:///c:/Users/DELL/Desktop/Cold%20Chain%20Logistic/scripts/ingest_sop_pinecone.py#L254-L263):
+Every time the script runs, it reads the raw bytes of each policy file and computes an MD5 checksum:
+
+```python
+file_bytes = file_path.read_bytes()
+file_hash = hashlib.md5(file_bytes).hexdigest()
+
+# If the hash in ingestion_hash_cache.json matches the file, skip it:
+if hash_cache.get(file_name) == file_hash:
+    print(f"Skipped (Unchanged): {file_name}")
+    continue
+```
+* **Result**: Files that have not changed are **never re-embedded or re-sent to Pinecone**, avoiding unnecessary API costs and latency.
+
+##### Step 3: Automatic Pruning of Deleted Documents
+Lines 224–252 in [`scripts/ingest_sop_pinecone.py`](file:///c:/Users/DELL/Desktop/Cold%20Chain%20Logistic/scripts/ingest_sop_pinecone.py#L224-L252):
+If you delete a document from `data/policy/`:
+```python
+cached_filenames = set(hash_cache.keys())
+current_filenames = set(current_files.keys())
+
+# Detect files present in cache but absent from disk:
+deleted_files = cached_filenames - current_filenames
+```
+For every deleted file, it automatically purges all corresponding vector chunks from Pinecone using either metadata filtering (`source_file == file_name`) or ID prefix matching (`{file_name}-chunk-*`), and removes it from the cache.
+
+##### Step 4: Polymorphic Parsing & Chunking
+Lines 123–198 in [`scripts/ingest_sop_pinecone.py`](file:///c:/Users/DELL/Desktop/Cold%20Chain%20Logistic/scripts/ingest_sop_pinecone.py#L123-L198):
+The script inspects the file extension and adapts its chunking strategy:
+* **Markdown (`.md`)**: Splits hierarchically on headers (`#`, `##`, `###`) first using `MarkdownHeaderTextSplitter` so each chunk preserves its section title, followed by `RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=60)`.
+* **PDF (`.pdf`)**: Uses `pypdf` to extract text page-by-page and records the page number in the metadata.
+* **Plain text (`.txt`)**: Splits directly via character recursion.
+* **Tables (`.csv`, `.xlsx`)**: Converts each row into `"Column: Value"` key-value pairs with row indices.
+
+##### Step 5: Deterministic Chunk IDs & Batch Upsert
+Lines 278–294 in [`scripts/ingest_sop_pinecone.py`](file:///c:/Users/DELL/Desktop/Cold%20Chain%20Logistic/scripts/ingest_sop_pinecone.py#L278-L294):
+* Each chunk is assigned a deterministic ID:
+  ```python
+  explicit_ids.append(f"{file_name}-chunk-{idx}")
+  ```
+  *(e.g., `Cold_Chain_Incident_SOP_v2.md-chunk-0`, `Cold_Chain_Incident_SOP_v2.md-chunk-1`)*
+* Chunks are upserted in batches of 100 via `vector_store.add_documents()` to avoid network timeouts.
+* Once finished, the new MD5 hash is written to `data/cache/ingestion_hash_cache.json`.
+
 ---
 
 ### Phase 2: Enterprise Security, Semantic Layer & Agent Permissions
@@ -745,12 +891,33 @@ Every execution step performed by the agent is recorded into `FDE_VIEWS.AgentAud
 * `Content`: Raw payload and output.
 
 ### Phase 5: Interactive Dispatch Console (Streamlit UI)
-Launch the web interface:
+
+Launch the enterprise web interface:
 ```powershell
 uv run streamlit run src/ui.py
 ```
-* **Dispatch Console**: Chat with the fleet data, visualize maps, and inspect corridor conditions.
-* **Database Authorization Gate**: High-privilege admin panel to query `FDE_VIEWS.AgentAuditLog`.
+
+The UI operates with role-based separation across two operational modes:
+
+#### 1. 🧊 Dispatch Console (Public Operator Mode)
+* **Natural Language Chat**: Front-line operators submit queries without writing SQL.
+* **Execution Transparency**: Real-time status indicators reveal tool intent, generated SQL parameters, and raw responses.
+* **Structured Response Matrix**: Synthesizes output into Executive Summaries, telemetry comparison tables, and SOP-backed action plans.
+* **Workspace Session Reset**: Easily flush context memory for new shift handoffs.
+
+#### 2. 🛡️ Admin Operations (Elevated Privilege Portal)
+Gated behind administrative authentication (`SQL_ADMIN_USER` and `SQL_ADMIN_PASSWORD`), this portal provides mission-critical management across two functional tabs:
+
+##### Tab A: 📋 SOP Knowledge Base Manager (Powered by `src/sop_service.py`)
+* **Policy Explorer**: Lists all documents in `data/policy/` with file format, file size, last modified timestamp, and Pinecone vector synchronization status (`Synced`, `Modified`, `Unindexed`).
+* **Multi-Format Upload**: Upload new compliance policies (`.md`, `.pdf`, `.txt`, `.csv`, `.xlsx`) with automatic post-upload Pinecone vectorization.
+* **In-Browser Policy Editor**: Live-edit `.md` and `.txt` documents directly within the UI to adjust temperature thresholds or escalation criteria, followed by instant 1-click re-indexing.
+* **Orphan Document Deletion**: Permanently remove obsolete policies from disk with automatic pruning of corresponding vector chunks in Pinecone.
+* **Non-Invasive Architecture**: Handled via [`src/sop_service.py`](file:///c:/Users/DELL/Desktop/Cold%20Chain%20Logistic/src/sop_service.py), which triggers [`scripts/ingest_sop_pinecone.py`](file:///c:/Users/DELL/Desktop/Cold%20Chain%20Logistic/scripts/ingest_sop_pinecone.py) in an isolated process without modifying core pipeline code.
+
+##### Tab B: 📊 Enterprise Agent Audit Trail
+* **Database Inspection**: Connects as system administrator to query `FDE_VIEWS.AgentAuditLog`.
+* **Execution History**: Full tabular view of timestamps, session tokens, nodes, tool executions, and raw generated outputs for regulatory compliance audits.
 
 ### Phase 6: Cloud Deployment on AWS EC2 & Infrastructure Management
 

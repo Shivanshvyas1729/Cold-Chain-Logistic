@@ -18,11 +18,14 @@ project_root = script_dir.parent              # climbs to project root
 
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+if str(script_dir) not in sys.path:
+    sys.path.insert(0, str(script_dir))
 
 load_dotenv(project_root / ".env")
 
 # Import the compiled graph and tools list dynamically
 from src.orchestrator import fde_agent
+from src import sop_service
 
 # ==========================================
 # 2. SQL CREDENTIALS MAPPING FROM .ENV
@@ -106,6 +109,15 @@ if "thread_id" not in st.session_state:
 if "ui_messages" not in st.session_state:
     st.session_state.ui_messages = []
 
+if "admin_authenticated" not in st.session_state:
+    st.session_state.admin_authenticated = False
+
+if "admin_user" not in st.session_state:
+    st.session_state.admin_user = ""
+
+if "admin_pass" not in st.session_state:
+    st.session_state.admin_pass = ""
+
 thread_config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
 # ==========================================
@@ -115,7 +127,7 @@ with st.sidebar:
     st.image(str(script_dir / "image_L25X5q.png") if (script_dir / "image_L25X5q.png").exists() else "https://cdn-icons-png.flaticon.com/512/2830/2830305.png", width=65)
     st.title("FDE Command Center")
     
-    app_mode = st.radio("System Mode", ["🧊 Dispatch Console", "🛡️ Security & Audit Logs"])
+    app_mode = st.radio("System Mode", ["🧊 Dispatch Console", "🛡️ Admin Operations"])
     
     st.markdown("---")
     st.caption(f"Session Token: `{st.session_state.thread_id[:8]}...`")
@@ -241,34 +253,197 @@ if app_mode == "🧊 Dispatch Console":
                 st.error(error_fallback)
 
 
-elif app_mode == "🛡️ Security & Audit Logs":
+elif app_mode == "🛡️ Admin Operations":
     # ------------------------------------------
-    # TAB 2: AUDIT LOG VIEWER (REQUIRES ADMIN CREDENTIALS FROM .ENV OR INPUT)
+    # ADMIN OPERATIONS (RBAC GATED BY SQL_ADMIN_USER / PASSWORD)
     # ------------------------------------------
-    st.title("🛡️ Enterprise Agent Audit Trail")
-    st.caption("Secure database inspection of FDE_VIEWS.AgentAuditLog")
-    
-    st.markdown("### Database Authorization Gate")
-    st.markdown("Enter high-privilege administrative credentials (defined in `.env` as `SQL_ADMIN_USER`) to query audit logs.")
-    
-    with st.form("admin_auth_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            input_user = st.text_input("Admin Username", value=os.getenv("SQL_ADMIN_USER", ""))
-        with col2:
-            input_pass = st.text_input("Admin Password", type="password", value="")
-            
-        submit_admin = st.form_submit_button("Authenticate & Load Logs", use_container_width=True)
+    st.title("🛡️ Enterprise Administrative Operations")
+    st.caption("Secure Management Portal for SOP Knowledge Assets & Immutable Audit Logs")
 
-    if submit_admin:
-        expected_admin_user = os.getenv("SQL_ADMIN_USER")
-        expected_admin_pass = os.getenv("SQL_ADMIN_PASSWORD")
-        
-        if input_user == expected_admin_user and input_pass == expected_admin_pass:
+    expected_admin_user = os.getenv("SQL_ADMIN_USER", "sa")
+    expected_admin_pass = os.getenv("SQL_ADMIN_PASSWORD")
+
+    if not st.session_state.admin_authenticated:
+        st.markdown("### 🔐 Database & System Authorization Gate")
+        st.info("Administrative access requires elevated credentials (`SQL_ADMIN_USER` / `SQL_ADMIN_PASSWORD`).")
+
+        with st.form("admin_auth_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                input_user = st.text_input("Admin Username", value=expected_admin_user)
+            with col2:
+                input_pass = st.text_input("Admin Password", type="password", value="")
+
+            submit_admin = st.form_submit_button("Authenticate as Admin", use_container_width=True)
+
+        if submit_admin:
+            if input_user == expected_admin_user and input_pass == expected_admin_pass:
+                st.session_state.admin_authenticated = True
+                st.session_state.admin_user = input_user
+                st.session_state.admin_pass = input_pass
+                st.toast("✅ Authenticated successfully as Administrator!")
+                st.rerun()
+            else:
+                st.error("❌ Invalid Administrator Credentials. Access Denied.")
+    else:
+        # Authenticated Admin Header with Sign-out
+        col_status, col_btn = st.columns([4, 1])
+        with col_status:
+            st.success(f"🔐 Authenticated as: **{st.session_state.admin_user}** (Elevated Privileges)")
+        with col_btn:
+            if st.button("🚪 Sign Out", use_container_width=True):
+                st.session_state.admin_authenticated = False
+                st.session_state.admin_user = ""
+                st.session_state.admin_pass = ""
+                st.rerun()
+
+        # Admin Feature Tabs
+        tab_sop, tab_audit = st.tabs(["📋 SOP Policy Management", "📊 Security & Audit Logs"])
+
+        # ----------------------------------------------------
+        # TAB 1: SOP KNOWLEDGE BASE MANAGER
+        # ----------------------------------------------------
+        with tab_sop:
+            st.markdown("### Standard Operating Procedure (SOP) Knowledge Base")
+            st.caption("Manage regulatory documents, operational thresholds, and synchronize Pinecone vector indices.")
+
+            # Refresh documents list
+            docs = sop_service.list_sop_documents()
+            total_docs = len(docs)
+            total_size = sum(d["size_kb"] for d in docs)
+            all_synced = all(d["is_synced"] for d in docs) if docs else False
+
+            # Top Metrics & Sync Trigger
+            m_col1, m_col2, m_col3, m_col4 = st.columns([1.5, 1.5, 2, 2])
+            with m_col1:
+                st.metric("Total SOP Assets", total_docs)
+            with m_col2:
+                st.metric("Storage Footprint", f"{total_size:.2f} KB")
+            with m_col3:
+                st.metric("Pinecone Index State", "🟢 Fully Synced" if all_synced else "🟡 Sync Recommended")
+            with m_col4:
+                st.write("")
+                if st.button("🔄 Sync with Pinecone", use_container_width=True):
+                    with st.status("🔄 Synchronizing SOP Knowledge Base with Pinecone...", expanded=True) as status:
+                        success, logs = sop_service.run_pinecone_ingestion_sync()
+                        if success:
+                            status.update(label="✅ Knowledge Base Synchronized Successfully!", state="complete", expanded=False)
+                            st.toast("Pinecone vector store is up to date!")
+                        else:
+                            status.update(label="❌ Synchronization Failed", state="error", expanded=True)
+                            st.error("Error occurred during vector sync.")
+                        with st.expander("📜 Ingestion Engine Logs", expanded=not success):
+                            st.code(logs, language="text")
+                    st.rerun()
+
+            st.markdown("---")
+
+            # Document Inventory Table
+            st.markdown("#### 📁 Active Policy Inventory (`data/policy/`)")
+            if docs:
+                df_docs = pd.DataFrame(docs)[["filename", "format", "size_kb", "modified", "sync_status"]]
+                st.dataframe(
+                    df_docs,
+                    column_config={
+                        "filename": "Document Asset",
+                        "format": "Format",
+                        "size_kb": st.column_config.NumberColumn("Size", format="%.2f KB"),
+                        "modified": "Last Modified",
+                        "sync_status": "Index Status"
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.info("No policy files found in `data/policy/`. Upload a document below.")
+
+            st.markdown("---")
+            st.markdown("#### 🛠️ Document Operations")
+
+            op_upload, op_edit, op_delete = st.tabs(["📤 Upload New SOP", "✏️ View & Edit SOP", "🗑️ Delete SOP"])
+
+            # SUB-OPERATION 1: UPLOAD
+            with op_upload:
+                st.markdown("Upload new compliance guidelines (`.md`, `.pdf`, `.txt`, `.csv`, `.xlsx`).")
+                uploaded_file = st.file_uploader(
+                    "Select Document Asset",
+                    type=["md", "pdf", "txt", "csv", "xlsx"],
+                    key="sop_file_uploader"
+                )
+                auto_sync_on_upload = st.checkbox("Automatically synchronize with Pinecone after saving", value=True)
+
+                if st.button("💾 Save & Upload to Policy Store", disabled=(uploaded_file is None), use_container_width=True):
+                    if uploaded_file is not None:
+                        saved_path = sop_service.upload_sop_asset(uploaded_file.name, uploaded_file.getvalue())
+                        st.success(f"✅ Saved `{uploaded_file.name}` to `{saved_path}`.")
+                        if auto_sync_on_upload:
+                            with st.status("🔄 Ingesting into Pinecone Vector Index...", expanded=True) as status:
+                                success, logs = sop_service.run_pinecone_ingestion_sync()
+                                if success:
+                                    status.update(label="✅ Document Indexed Successfully!", state="complete", expanded=False)
+                                else:
+                                    status.update(label="❌ Indexing Encountered Issues", state="error", expanded=True)
+                                with st.expander("📜 Ingestion Engine Output", expanded=not success):
+                                    st.code(logs, language="text")
+                        st.rerun()
+
+            # SUB-OPERATION 2: VIEW & EDIT
+            with op_edit:
+                editable_docs = [d["filename"] for d in docs if d["editable"]]
+                if editable_docs:
+                    selected_edit_doc = st.selectbox("Choose Policy to Edit", editable_docs)
+                    current_content = sop_service.read_sop_text(selected_edit_doc)
+                    edited_content = st.text_area("Document Content (Markdown / Text)", value=current_content, height=450)
+                    auto_sync_on_edit = st.checkbox("Automatically synchronize with Pinecone on save", value=True, key="edit_sync_chk")
+
+                    if st.button("💾 Save Modifications & Re-Index", use_container_width=True):
+                        sop_service.save_sop_text(selected_edit_doc, edited_content)
+                        st.success(f"✅ Updated `{selected_edit_doc}` successfully.")
+                        if auto_sync_on_edit:
+                            with st.status("🔄 Re-indexing Modified Chunks in Pinecone...", expanded=True) as status:
+                                success, logs = sop_service.run_pinecone_ingestion_sync()
+                                if success:
+                                    status.update(label="✅ Vector Index Synchronized!", state="complete", expanded=False)
+                                else:
+                                    status.update(label="❌ Ingestion Error", state="error", expanded=True)
+                                with st.expander("📜 Ingestion Engine Output", expanded=not success):
+                                    st.code(logs, language="text")
+                        st.rerun()
+                else:
+                    st.info("No editable text documents (`.md`, `.txt`) currently available.")
+
+            # SUB-OPERATION 3: DELETE
+            with op_delete:
+                if docs:
+                    all_filenames = [d["filename"] for d in docs]
+                    selected_del_doc = st.selectbox("Select Policy Document to Delete", all_filenames)
+                    st.warning(f"⚠️ Deleting `{selected_del_doc}` will permanently remove it from `data/policy/` and purge its vector chunks from Pinecone.")
+                    confirm_del = st.checkbox(f"Confirm permanent deletion of `{selected_del_doc}`", value=False)
+
+                    if st.button("🗑️ Permanently Delete Document", disabled=not confirm_del, use_container_width=True):
+                        sop_service.delete_sop_asset(selected_del_doc)
+                        st.success(f"Deleted `{selected_del_doc}` from disk.")
+                        with st.status("🔄 Purging Vector Chunks from Pinecone...", expanded=True) as status:
+                            success, logs = sop_service.run_pinecone_ingestion_sync()
+                            if success:
+                                status.update(label="✅ Vector Chunks Purged & Index Updated!", state="complete", expanded=False)
+                            else:
+                                status.update(label="❌ Purge Encountered Issues", state="error", expanded=True)
+                            with st.expander("📜 Ingestion Engine Output", expanded=not success):
+                                st.code(logs, language="text")
+                        st.rerun()
+                else:
+                    st.info("No documents available to delete.")
+
+        # ----------------------------------------------------
+        # TAB 2: AUDIT LOG VIEWER
+        # ----------------------------------------------------
+        with tab_audit:
+            st.markdown("### 📊 Enterprise Agent Audit Trail")
+            st.caption("Secure inspection of `FDE_VIEWS.AgentAuditLog`")
+
             try:
-                # Build an isolated admin connection using dynamic driver detection
-                admin_engine = get_mssql_engine(input_user, input_pass)
-                
+                admin_engine = get_mssql_engine(st.session_state.admin_user, st.session_state.admin_pass)
                 with admin_engine.connect() as conn:
                     query = """
                         SELECT LogID, Timestamp, SessionID, NodeExecuted, ToolName, Content 
@@ -276,9 +451,7 @@ elif app_mode == "🛡️ Security & Audit Logs":
                         ORDER BY Timestamp DESC
                     """
                     df = pd.read_sql(query, conn)
-                
-                st.success("✅ Authenticated successfully as Admin.")
-                
+
                 if not df.empty:
                     st.dataframe(
                         df,
@@ -296,8 +469,5 @@ elif app_mode == "🛡️ Security & Audit Logs":
                     )
                 else:
                     st.info("No audit logs found in the database. Run a query in the Dispatch Console first.")
-                    
             except Exception as e:
                 st.error(f"Database Query Failed: {e}")
-        else:
-            st.error("❌ Invalid Administrator Credentials.")
