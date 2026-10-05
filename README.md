@@ -149,7 +149,7 @@ sequenceDiagram
     Weather-->>Agent: Returns: Ambient Temp=37.3°C, Wind=17.7km/h, High Disruption (8.5/10)
     
     Agent->>SOP: Tool 3: Query: "Temperature threshold for fresh perishables and high risk escalation"
-    SOP-->>Agent: Returns: Fresh Perishables max 4.0°C; High Risk + Delay > 0.65 = Tier 2 Escalation
+    SOP-->>Agent: Returns: Fresh Perishables max 4.0°C, High Risk + Delay > 0.65 = Tier 2 Escalation
     
     Note over Agent: Synthesizes multi-source evidence into structured response
     Agent->>Audit: INSERT INTO FDE_VIEWS.AgentAuditLog (Session, Node, Tool, Payload)
