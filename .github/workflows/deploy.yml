@@ -1,0 +1,121 @@
+name: Deploy Cold-Chain AI Assistant to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions UI
+
+jobs:
+  validate:
+    name: Code Validation & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check Python Syntax
+        run: |
+          python -m py_compile src/*.py scripts/*.py
+          echo "All Python scripts passed compilation check."
+
+  deploy:
+    name: Deploy to AWS EC2
+    needs: validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Execute Remote SSH Commands on EC2
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          envs: ENV_FILE_CONTENT
+          script_stop: true
+          script: |
+            set -e
+
+            echo "========================================="
+            echo "🚀 [1/5] Setting up Project Directory..."
+            echo "========================================="
+            
+            APP_DIR="$HOME/Cold-Chain-Logistic"
+            
+            if [ ! -d "$APP_DIR" ]; then
+              if [ -d "$HOME/cold-chain-logistics-FDE-Project" ]; then
+                APP_DIR="$HOME/cold-chain-logistics-FDE-Project"
+              else
+                echo "Directory not found. Cloning repository into $APP_DIR..."
+                git clone https://github.com/Shivanshvyas1729/Cold-Chain-Logistic.git "$APP_DIR"
+              fi
+            fi
+            
+            cd "$APP_DIR"
+            echo "Working directory: $(pwd)"
+
+            echo "========================================="
+            echo "📥 [2/5] Fetching Latest Code from Git..."
+            echo "========================================="
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Optionally sync .env if ENV_FILE secret was provided in GitHub
+            if [ -n "$ENV_FILE_CONTENT" ]; then
+              echo "Syncing .env configuration from GitHub Secret..."
+              echo "$ENV_FILE_CONTENT" > .env
+              chmod 600 .env
+            fi
+
+            echo "========================================="
+            echo "📦 [3/5] Updating Python Environment..."
+            echo "========================================="
+            if [ ! -d "venv" ]; then
+              python3 -m venv venv
+            fi
+            source venv/bin/activate
+            
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            echo "========================================="
+            echo "🐳 [4/5] Checking MSSQL Docker Container..."
+            echo "========================================="
+            if [ "$(docker ps -q -f name=legacy-mssql)" ]; then
+              echo "MSSQL container (legacy-mssql) is running."
+            elif [ "$(docker ps -aq -f status=exited -f name=legacy-mssql)" ]; then
+              echo "MSSQL container is stopped. Starting legacy-mssql..."
+              docker start legacy-mssql
+            fi
+
+            echo "========================================="
+            echo "🔄 [5/5] Restarting Streamlit Service..."
+            echo "========================================="
+            sudo systemctl restart streamlit
+            sleep 3
+
+            if sudo systemctl is-active --quiet streamlit; then
+              echo "✅ Streamlit service is active and running on port 8501!"
+            else
+              echo "❌ Streamlit service failed to start. Service logs:"
+              sudo systemctl status streamlit --no-pager
+              exit 1
+            fi
+
+            echo "🎉 Deployment completed successfully!"
+
+
+
+
+
